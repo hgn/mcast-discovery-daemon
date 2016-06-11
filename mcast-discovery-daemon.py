@@ -9,6 +9,8 @@ import time
 import sys
 import functools
 import argparse
+import signal
+import os
 
 
 MCAST_ADDR_V4 = '224.0.0.1' 
@@ -177,17 +179,11 @@ async def print_stats(queue):
         entry = await queue.get()
         update_db(db, entry)
         print_db(db)
-#    while True:
-#        try:
-#            while True:
-#                entry = queue.get_nowait()
-#                print(entry)
-#        except asyncio.queues.QueueEmpty:
-#            # do nothing
-#            pass
-#        except Exception as e:
-#            print(str(e))
-#        await asyncio.sleep(1)
+
+
+def ask_exit(signame, loop):
+    sys.stderr.write("got signal %s: exit\n" % signame)
+    loop.stop()
 
 
 def parse_args():
@@ -221,13 +217,17 @@ def main():
     fd = init_v6_tx_fd(ttl=args.ttl)
     asyncio.ensure_future(tx_v6(fd, addr=args.v6addr, port=args.port, interval=args.interval))
 
-
-    # outputter
+    # Outputter
     asyncio.ensure_future(print_stats(queue))
 
-    # start it
-    loop.run_forever()
-    loop.close()
+    for signame in ('SIGINT', 'SIGTERM'):
+        loop.add_signal_handler(getattr(signal, signame),
+                                functools.partial(ask_exit, signame, loop))
+
+    try:
+        loop.run_forever()
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
