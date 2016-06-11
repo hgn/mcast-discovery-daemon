@@ -6,6 +6,7 @@ import struct
 import binascii
 import time
 import sys
+import functools
 
 
 MCAST_GRP     = '224.1.1.1' 
@@ -16,10 +17,7 @@ TTL = 2
 
 MSG = b""
 
-v4_rx_fd = None
-v6_tx_fd = None
-
-v6_rx_fd = None
+v4_tx_fd = None
 v6_tx_fd = None
 
 
@@ -66,24 +64,24 @@ def init_v6_tx_fd():
     return sock
 
 
-def cb_v4_rx():
+def cb_v4_rx(fd):
     try:
-        data, addr = v4_rx_fd.recvfrom(1024)
+        data, addr = fd.recvfrom(1024)
     except socket.error as e:
         print('Expection')
     print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
     print("Message: {!r}".format(data.decode()))
 
-def cb_v6_rx():
+def cb_v6_rx(fd):
     try:
-        data, addr = v6_rx_fd.recvfrom(1024)
+        data, addr = fd.recvfrom(1024)
     except socket.error as e:
         print('Expection')
     print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
     print("Message: {!r}".format(data.decode()))
 
 @asyncio.coroutine
-def tx_v4():
+def tx_v4(*args):
     while True:
         try:
             v4_tx_fd.sendto(MSG, (MCAST_GRP, MCAST_PORT))
@@ -103,11 +101,11 @@ def tx_v6():
 
 loop = asyncio.get_event_loop()
 
-v4_rx_fd = init_v4_rx_fd()
-loop.add_reader(v4_rx_fd, cb_v4_rx)
+fd = init_v4_rx_fd()
+loop.add_reader(fd, functools.partial(cb_v4_rx, fd))
 
-v6_rx_fd = init_v6_rx_fd()
-loop.add_reader(v6_rx_fd, cb_v6_rx)
+fd = init_v6_rx_fd()
+loop.add_reader(fd, functools.partial(cb_v6_rx, fd))
 
 tx_work = []
 v4_tx_fd = init_v4_tx_fd()
