@@ -28,7 +28,7 @@ def init_v4_rx_fd():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if hasattr(sock, "SO_REUSEPORT"):
-        self.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEPORT, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
     
@@ -52,7 +52,7 @@ def init_v6_rx_fd():
     sock = socket.socket(addrinfo[0], socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if hasattr(sock, "SO_REUSEPORT"):
-        self.setsockopt(sock.SOL_SOCKET, sock.SO_REUSEPORT, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     sock.bind(('', MCAST_PORT))
     group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
     mreq = group_bin + struct.pack('@I', 0)
