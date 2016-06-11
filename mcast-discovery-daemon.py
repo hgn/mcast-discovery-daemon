@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*- 
 
 import asyncio
 import socket
@@ -59,22 +60,25 @@ def init_v6_tx_fd(ttl):
     return sock
 
 
-def cb_v4_rx(fd):
+def cb_v4_rx(fd, queue):
+    try:
+        data, addr = fd.recvfrom(1024)
+    except socket.error as e:
+        print('Expection')
+    #print("\033c")
+    print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
+    print("Message: {!r}".format(data.decode()))
+    queue.put_nowait("{!r}".format(data.decode()))
+
+
+def cb_v6_rx(fd, queue):
     try:
         data, addr = fd.recvfrom(1024)
     except socket.error as e:
         print('Expection')
     print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
     print("Message: {!r}".format(data.decode()))
-
-
-def cb_v6_rx(fd):
-    try:
-        data, addr = fd.recvfrom(1024)
-    except socket.error as e:
-        print('Expection')
-    print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
-    print("Message: {!r}".format(data.decode()))
+    queue.put_nowait("{!r}".format(data.decode()))
 
 
 async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
@@ -95,6 +99,20 @@ async def tx_v6(fd, addr=None, port=DEFAULT_PORT, interval=None):
         await asyncio.sleep(interval)
 
 
+async def print_stats(queue):
+    while True:
+        try:
+            while True:
+                entry = queue.get_nowait()
+                print(entry)
+        except asyncio.queues.QueueEmpty:
+            # do nothing
+            pass
+        except Exception as e:
+            print(str(e))
+        await asyncio.sleep(1)
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--v4addr", help="IPv4 mcast address (default: {})".format(MCAST_ADDR_V4), type=str, default=MCAST_ADDR_V4)
@@ -110,13 +128,14 @@ def main():
     args = parse_args()
 
     loop = asyncio.get_event_loop()
+    queue = asyncio.Queue(100)
 
     # RX functionality
     fd = init_v4_rx_fd(addr=args.v4addr, port=args.port)
-    loop.add_reader(fd, functools.partial(cb_v4_rx, fd))
+    loop.add_reader(fd, functools.partial(cb_v4_rx, fd, queue))
 
     fd = init_v6_rx_fd(addr=args.v6addr, port=args.port)
-    loop.add_reader(fd, functools.partial(cb_v6_rx, fd))
+    loop.add_reader(fd, functools.partial(cb_v6_rx, fd, queue))
 
     # TX side
     fd = init_v4_tx_fd(ttl=args.ttl)
@@ -125,10 +144,15 @@ def main():
     fd = init_v6_tx_fd(ttl=args.ttl)
     asyncio.ensure_future(tx_v6(fd, addr=args.v6addr, port=args.port, interval=args.interval))
 
+
+    # outputter
+    asyncio.ensure_future(print_stats(queue))
+
     # start it
     loop.run_forever()
     loop.close()
 
 
 if __name__ == "__main__":
+    print(chr(27) + "[2J")
     main()
