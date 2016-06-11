@@ -10,7 +10,7 @@ import functools
 import argparse
 
 
-MCAST_ADDR_V4 = '224.1.1.1' 
+MCAST_ADDR_V4 = '224.0.0.1' 
 MCAST_ADDR_V6 = 'FF02::1' 
 DEFAULT_PORT  = 5007
 
