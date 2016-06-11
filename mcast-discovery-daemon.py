@@ -71,7 +71,10 @@ def cb_v4_rx(fd, queue):
     d.append(addr)
     #print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
     #print("Message: {!r}".format(data.decode()))
-    queue.put_nowait(d)
+    try:
+        queue.put_nowait(d)
+    except asyncio.queues.QueueFull:
+        sys.stderr.write("queue overflow, strange things happens")
 
 
 def cb_v6_rx(fd, queue):
@@ -83,7 +86,10 @@ def cb_v6_rx(fd, queue):
     d.append("v6")
     d.append(data)
     d.append(addr)
-    queue.put_nowait(d)
+    try:
+        queue.put_nowait(d)
+    except asyncio.queues.QueueFull:
+        sys.stderr.write("queue overflow, strange things happens")
 
 
 async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
@@ -189,7 +195,7 @@ def parse_args():
     parser.add_argument("--v6addr", help="IPv6 mcast address (default: {})".format(MCAST_ADDR_V6), type=str, default=MCAST_ADDR_V6)
     parser.add_argument("--port", help="TX/RX port (default: {})".format(DEFAULT_PORT), type=int, default=DEFAULT_PORT)
     parser.add_argument("--ttl", help="IPv{4,6} TTL for transmission (default: 2)", type=int, default=2)
-    parser.add_argument("-i", "--interval", help="Time between transmission (default: 2)", type=int, default=2)
+    parser.add_argument("-i", "--interval", help="Time between transmission (default: 2)", type=float, default=2.0)
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     return parser.parse_args()
 
