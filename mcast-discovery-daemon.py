@@ -65,10 +65,13 @@ def cb_v4_rx(fd, queue):
         data, addr = fd.recvfrom(1024)
     except socket.error as e:
         print('Expection')
-    #print("\033c")
-    print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
-    print("Message: {!r}".format(data.decode()))
-    queue.put_nowait("{!r}".format(data.decode()))
+    d = []
+    d.append("v4")
+    d.append(data)
+    d.append(addr)
+    #print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
+    #print("Message: {!r}".format(data.decode()))
+    queue.put_nowait(d)
 
 
 def cb_v6_rx(fd, queue):
@@ -76,9 +79,11 @@ def cb_v6_rx(fd, queue):
         data, addr = fd.recvfrom(1024)
     except socket.error as e:
         print('Expection')
-    print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
-    print("Message: {!r}".format(data.decode()))
-    queue.put_nowait("{!r}".format(data.decode()))
+    d = []
+    d.append("v6")
+    d.append(data)
+    d.append(addr)
+    queue.put_nowait(d)
 
 
 async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
@@ -99,18 +104,83 @@ async def tx_v6(fd, addr=None, port=DEFAULT_PORT, interval=None):
         await asyncio.sleep(interval)
 
 
+def update_db(db, msg):
+    proto = msg[0]; data = msg[1]; addr = msg[2]
+    if addr not in db:
+        db[addr] = dict()
+        db[addr]['first-seen'] = time.time()
+        db[addr]['received-messages'] = 0
+    db[addr]['last-seen'] = time.time()
+    db[addr]['received-messages'] += 1
+
+
+
+def display_time(seconds, granularity=2):
+    result = []
+    intervals = (
+            ('weeks', 604800),
+            ('days',   86400),
+            ('hours',   3600),
+            ('minutes',   60),
+            ('seconds',    1),
+    )
+
+    if seconds <= 1.0:
+        return "just now"
+
+    for name, count in intervals:
+        value = seconds // count
+        if value:
+            seconds -= value * count
+            if value == 1:
+                name = name.rstrip('s')
+            result.append("{} {} ago".format(value, name))
+    return ', '.join(result[:granularity])
+
+
+def print_db(db):
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    
+    if not sys.stdout.isatty():
+        HEADER = OKBLUE = OKGREEN = WARNING = FAIL = ENDC = ''
+
+    print("\033c")
+    sys.stdout.write("{}Number of Neighbors: {}{} (may include"
+                     " this host too, multiple source addresses"
+                     " possible)\n\n".format(WARNING, len(db), ENDC))
+    for key, value in db.items():
+        sys.stdout.write("{}{}{}\n".format(OKGREEN, key[0], ENDC))
+        now = time.time()
+        last_seen_delta = display_time(now - value['last-seen'])
+        fist_seen_delta = display_time(now - value['first-seen'])
+        sys.stdout.write("\tLast seen:  {}\n".format(last_seen_delta))
+        sys.stdout.write("\tFirst seen: {}\n".format(fist_seen_delta))
+        sys.stdout.write("\tReceived messages: {}\n".format(value['received-messages']))
+        print("\n")
+
+
 async def print_stats(queue):
+    db = dict()
     while True:
-        try:
-            while True:
-                entry = queue.get_nowait()
-                print(entry)
-        except asyncio.queues.QueueEmpty:
-            # do nothing
-            pass
-        except Exception as e:
-            print(str(e))
-        await asyncio.sleep(1)
+        entry = await queue.get()
+        update_db(db, entry)
+        print_db(db)
+#    while True:
+#        try:
+#            while True:
+#                entry = queue.get_nowait()
+#                print(entry)
+#        except asyncio.queues.QueueEmpty:
+#            # do nothing
+#            pass
+#        except Exception as e:
+#            print(str(e))
+#        await asyncio.sleep(1)
 
 
 def parse_args():
@@ -128,7 +198,7 @@ def main():
     args = parse_args()
 
     loop = asyncio.get_event_loop()
-    queue = asyncio.Queue(100)
+    queue = asyncio.Queue(32)
 
     # RX functionality
     fd = init_v4_rx_fd(addr=args.v4addr, port=args.port)
@@ -154,5 +224,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print(chr(27) + "[2J")
     main()
