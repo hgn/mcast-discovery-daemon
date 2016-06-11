@@ -17,9 +17,6 @@ TTL = 2
 
 MSG = b""
 
-v4_tx_fd = None
-v6_tx_fd = None
-
 
 
 def init_v4_rx_fd():
@@ -37,6 +34,7 @@ def init_v4_rx_fd():
     mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
     return sock
+
 
 def init_v4_tx_fd():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -57,6 +55,7 @@ def init_v6_rx_fd():
     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq)
     return sock
 
+
 def init_v6_tx_fd():
     addrinfo = socket.getaddrinfo(MCAST_ADDR_V6, None)[0]
     sock = socket.socket(addrinfo[0], socket.SOCK_DGRAM)
@@ -72,6 +71,7 @@ def cb_v4_rx(fd):
     print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
     print("Message: {!r}".format(data.decode()))
 
+
 def cb_v6_rx(fd):
     try:
         data, addr = fd.recvfrom(1024)
@@ -80,43 +80,43 @@ def cb_v6_rx(fd):
     print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
     print("Message: {!r}".format(data.decode()))
 
-@asyncio.coroutine
-def tx_v4(*args):
-    while True:
-        try:
-            v4_tx_fd.sendto(MSG, (MCAST_GRP, MCAST_PORT))
-        except Exception as e:
-            print(str(e))
-        yield from asyncio.sleep(2)
 
-@asyncio.coroutine
-def tx_v6():
+async def tx_v4(fd):
     while True:
         try:
-            v6_tx_fd.sendto(MSG, (MCAST_ADDR_V6, MCAST_PORT))
+            fd.sendto(MSG, (MCAST_GRP, MCAST_PORT))
         except Exception as e:
             print(str(e))
-        yield from asyncio.sleep(2)
+        await asyncio.sleep(2)
+
+
+async def tx_v6(fd):
+    while True:
+        try:
+            fd.sendto(MSG, (MCAST_ADDR_V6, MCAST_PORT))
+        except Exception as e:
+            print(str(e))
+        await asyncio.sleep(2)
 
 
 loop = asyncio.get_event_loop()
 
+# RX functionality
 fd = init_v4_rx_fd()
 loop.add_reader(fd, functools.partial(cb_v4_rx, fd))
 
 fd = init_v6_rx_fd()
 loop.add_reader(fd, functools.partial(cb_v6_rx, fd))
 
-tx_work = []
-v4_tx_fd = init_v4_tx_fd()
-if v4_tx_fd:
-    tx_work.append(tx_v4())
-v6_tx_fd = init_v6_tx_fd()
-if v6_tx_fd:
-    tx_work.append(tx_v6())
 
-loop.run_until_complete(asyncio.wait(tx_work))
+# TX side
+fd = init_v4_tx_fd()
+asyncio.ensure_future(tx_v4(fd))
 
+fd = init_v6_tx_fd()
+asyncio.ensure_future(tx_v6(fd))
+
+# start it
 loop.run_forever()
 
 loop.close()
