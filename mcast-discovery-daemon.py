@@ -99,25 +99,27 @@ async def tx_v6(fd):
         await asyncio.sleep(2)
 
 
-loop = asyncio.get_event_loop()
+def main():
+    loop = asyncio.get_event_loop()
 
-# RX functionality
-fd = init_v4_rx_fd()
-loop.add_reader(fd, functools.partial(cb_v4_rx, fd))
+    # RX functionality
+    fd = init_v4_rx_fd()
+    loop.add_reader(fd, functools.partial(cb_v4_rx, fd))
 
-fd = init_v6_rx_fd()
-loop.add_reader(fd, functools.partial(cb_v6_rx, fd))
+    fd = init_v6_rx_fd()
+    loop.add_reader(fd, functools.partial(cb_v6_rx, fd))
+
+    # TX side
+    fd = init_v4_tx_fd()
+    asyncio.ensure_future(tx_v4(fd))
+
+    fd = init_v6_tx_fd()
+    asyncio.ensure_future(tx_v6(fd))
+
+    # start it
+    loop.run_forever()
+    loop.close()
 
 
-# TX side
-fd = init_v4_tx_fd()
-asyncio.ensure_future(tx_v4(fd))
-
-fd = init_v6_tx_fd()
-asyncio.ensure_future(tx_v6(fd))
-
-# start it
-loop.run_forever()
-
-loop.close()
-
+if __name__ == "__main__":
+    main()
