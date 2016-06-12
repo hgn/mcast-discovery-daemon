@@ -39,10 +39,12 @@ def init_v4_rx_fd(addr=None, port=DEFAULT_PORT):
     return sock
 
 
-def init_v4_tx_fd(ttl):
+def init_v4_tx_fd(ttl, addr=None):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+    if addr:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(addr))
     return sock
 
 
@@ -192,6 +194,7 @@ def ask_exit(signame, loop):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--v4addr", help="IPv4 mcast address (default: {})".format(MCAST_ADDR_V4), type=str, default=MCAST_ADDR_V4)
+    parser.add_argument("--v4outaddr", help="IPv4 outgoing interface address (default: {})".format("None"), type=str, default=None)
     parser.add_argument("--v6addr", help="IPv6 mcast address (default: {})".format(MCAST_ADDR_V6), type=str, default=MCAST_ADDR_V6)
     parser.add_argument("--port", help="TX/RX port (default: {})".format(DEFAULT_PORT), type=int, default=DEFAULT_PORT)
     parser.add_argument("--ttl", help="IPv{4,6} TTL for transmission (default: 2)", type=int, default=2)
@@ -214,7 +217,7 @@ def main():
     loop.add_reader(fd, functools.partial(cb_v6_rx, fd, queue))
 
     # TX side
-    fd = init_v4_tx_fd(ttl=args.ttl)
+    fd = init_v4_tx_fd(ttl=args.ttl, addr=args.v4outaddr)
     asyncio.ensure_future(tx_v4(fd, addr=args.v4addr, port=args.port, interval=args.interval))
 
     fd = init_v6_tx_fd(ttl=args.ttl)
