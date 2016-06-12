@@ -59,7 +59,7 @@ def init_v6_rx_fd(addr=None, port=DEFAULT_PORT):
     if hasattr(sock, "SO_REUSEPORT"):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, MCAST_LOOP)
+    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_LOOP, MCAST_LOOP)
 
     sock.bind(('', port))
     group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
