@@ -18,6 +18,9 @@ MCAST_ADDR_V6 = 'FF02::1'
 DEFAULT_PORT  = 5007
 DEFAULT_INTERVAL = 5.0
 
+# For communication with separated thread (e.g. to use dbus-glib)
+# janus queue can be used: https://pypi.python.org/pypi/janus
+
 
 def init_v4_rx_fd(addr=None, port=DEFAULT_PORT):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
