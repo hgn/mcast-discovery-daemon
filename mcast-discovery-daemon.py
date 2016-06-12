@@ -81,7 +81,7 @@ def cb_v4_rx(fd, queue):
     except socket.error as e:
         print('Expection')
     d = []
-    d.append("v4")
+    d.append("IPv4")
     d.append(data)
     d.append(addr)
     #print("Messagr from: {}:{}".format(str(addr[0]), str(addr[1])))
@@ -98,7 +98,7 @@ def cb_v6_rx(fd, queue):
     except socket.error as e:
         print('Expection')
     d = []
-    d.append("v6")
+    d.append("IPv6")
     d.append(data)
     d.append(addr)
     try:
@@ -126,13 +126,24 @@ async def tx_v6(fd, addr=None, port=DEFAULT_PORT, interval=None):
 
 
 def update_db(db, msg):
-    proto = msg[0]; data = msg[1]; addr = msg[2]
-    if addr not in db:
-        db[addr] = dict()
-        db[addr]['first-seen'] = time.time()
-        db[addr]['received-messages'] = 0
-    db[addr]['last-seen'] = time.time()
-    db[addr]['received-messages'] += 1
+    print(msg[2][0])
+    proto = msg[0]; data = msg[1]
+    ip_src_addr = msg[2][0]
+    ip_src_port = msg[2][1]
+    if msg[0] == "IPv6":
+        ip_src_flow_info = msg[2][2]
+        ip_src_scope_id  = msg[2][3]
+    if ip_src_addr not in db:
+        db[ip_src_addr] = dict()
+        db[ip_src_addr]['network-protocol'] = msg[0]
+        db[ip_src_addr]['first-seen'] = time.time()
+        db[ip_src_addr]['received-messages'] = 0
+    db[ip_src_addr]['last-seen'] = time.time()
+    db[ip_src_addr]['received-messages'] += 1
+    db[ip_src_addr]['source-ports'] = ip_src_port
+    if msg[0] == "IPv6":
+        db[ip_src_addr]['flow-info'] = msg[2][2]
+        db[ip_src_addr]['scope-id'] = msg[2][3]
 
 
 
@@ -155,8 +166,8 @@ def display_time(seconds, granularity=2):
             seconds -= value * count
             if value == 1:
                 name = name.rstrip('s')
-            result.append("{} {} ago".format(value, name))
-    return ', '.join(result[:granularity])
+            result.append("{} {} ".format(value, name))
+    return ', '.join(result[:granularity]) + " ago"
 
 
 def print_db(db):
@@ -175,12 +186,13 @@ def print_db(db):
                      " this host too, multiple source addresses"
                      " possible)\n\n".format(WARNING, len(db), ENDC))
     for key, value in db.items():
-        sys.stdout.write("{}{}{}\n".format(OKGREEN, key[0], ENDC))
+        sys.stdout.write("{}{}{}\n".format(OKGREEN, key, ENDC))
         now = time.time()
         last_seen_delta = display_time(now - value['last-seen'])
         fist_seen_delta = display_time(now - value['first-seen'])
         sys.stdout.write("\tLast seen:  {}\n".format(last_seen_delta))
         sys.stdout.write("\tFirst seen: {}\n".format(fist_seen_delta))
+        sys.stdout.write("\tSource port: {}\n".format(value['source-ports']))
         sys.stdout.write("\tReceived messages: {}\n".format(value['received-messages']))
         print("\n")
 
