@@ -18,6 +18,10 @@ MCAST_ADDR_V6 = 'FF02::1'
 DEFAULT_PORT  = 5007
 DEFAULT_INTERVAL = 5.0
 
+# don't recognize own mcast transmissions
+# by default, can be changed for debugging
+MCAST_LOOP = 0
+
 # For communication with separated thread (e.g. to use dbus-glib)
 # janus queue can be used: https://pypi.python.org/pypi/janus
 
@@ -28,7 +32,7 @@ def init_v4_rx_fd(addr=None, port=DEFAULT_PORT):
     if hasattr(sock, "SO_REUSEPORT"):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, MCAST_LOOP)
     
     sock.bind(('', port))
     host = socket.gethostbyname(socket.gethostname())
@@ -54,6 +58,9 @@ def init_v6_rx_fd(addr=None, port=DEFAULT_PORT):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if hasattr(sock, "SO_REUSEPORT"):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, MCAST_LOOP)
+
     sock.bind(('', port))
     group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
     mreq = group_bin + struct.pack('@I', 0)
