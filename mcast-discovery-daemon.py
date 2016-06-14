@@ -17,6 +17,7 @@ MCAST_ADDR_V4 = '224.0.0.1'
 MCAST_ADDR_V6 = 'FF02::1' 
 DEFAULT_PORT  = 5007
 DEFAULT_INTERVAL = 5.0
+DEFAULT_TTL = 10
 
 # don't recognize own mcast transmissions
 # by default, can be changed for debugging
@@ -216,7 +217,7 @@ def parse_args():
     parser.add_argument("--v4outaddr", help="IPv4 outgoing interface address (default: {})".format("None"), type=str, default=None)
     parser.add_argument("--v6addr", help="IPv6 mcast address (default: {})".format(MCAST_ADDR_V6), type=str, default=MCAST_ADDR_V6)
     parser.add_argument("--port", help="TX/RX port (default: {})".format(DEFAULT_PORT), type=int, default=DEFAULT_PORT)
-    parser.add_argument("--ttl", help="IPv{4,6} TTL for transmission (default: 2)", type=int, default=2)
+    parser.add_argument("--ttl", help="IPv{4,6} TTL for transmission (default: {})".format(DEFAULT_TTL), type=int, default=DEFAULT_TTL)
     parser.add_argument("-i", "--interval", help="Time between transmission (default: {})".format(DEFAULT_INTERVAL), type=float, default=DEFAULT_INTERVAL)
     parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
     return parser.parse_args()
