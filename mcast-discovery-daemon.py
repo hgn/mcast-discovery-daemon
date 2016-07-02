@@ -11,6 +11,7 @@ import functools
 import argparse
 import signal
 import os
+import uuid
 
 
 MCAST_ADDR_V4 = '224.0.0.1' 
@@ -25,6 +26,8 @@ MCAST_LOOP = 0
 
 # For communication with separated thread (e.g. to use dbus-glib)
 # janus queue can be used: https://pypi.python.org/pypi/janus
+
+SECRET_COOKIE = str.encode(str(uuid.uuid4()))
 
 
 def init_v4_rx_fd(addr=None, port=DEFAULT_PORT):
@@ -75,7 +78,6 @@ def init_v6_tx_fd(ttl):
     sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_HOPS, ttl)
     return sock
 
-
 def cb_v4_rx(fd, queue):
     try:
         data, addr = fd.recvfrom(1024)
@@ -107,11 +109,24 @@ def cb_v6_rx(fd, queue):
     except asyncio.queues.QueueFull:
         sys.stderr.write("queue overflow, strange things happens")
 
+def create_payload():
+    data = SECRET_COOKIE
+    data_len = len(data)
+    head = struct.pack('l', data_len)
+    return head + data
+
+def parse_payload(raw):
+    size = struct.unpack('l', raw[0:8])[0]
+    data = raw[8:]
+    assert len(raw) == size + 8
+    return data
+
 
 async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
     while True:
         try:
-            fd.sendto(b'', (addr, port))
+            data = create_payload()
+            fd.sendto(data, (addr, port))
         except Exception as e:
             print(str(e))
         await asyncio.sleep(interval)
@@ -120,15 +135,15 @@ async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
 async def tx_v6(fd, addr=None, port=DEFAULT_PORT, interval=None):
     while True:
         try:
-            fd.sendto(b'', (addr, port))
+            data = create_payload()
+            fd.sendto(data, (addr, port))
         except Exception as e:
             print(str(e))
         await asyncio.sleep(interval)
 
 
 def update_db(db, msg):
-    print(msg[2][0])
-    proto = msg[0]; data = msg[1]
+    proto = msg[0]
     ip_src_addr = msg[2][0]
     ip_src_port = msg[2][1]
     if msg[0] == "IPv6":
@@ -202,6 +217,11 @@ async def print_stats(queue):
     db = dict()
     while True:
         entry = await queue.get()
+        data = entry[1]
+        parsed_data = parse_payload(data)
+        if parsed_data == SECRET_COOKIE:
+            # own packet, ignore it
+            return
         update_db(db, entry)
         print_db(db)
 
