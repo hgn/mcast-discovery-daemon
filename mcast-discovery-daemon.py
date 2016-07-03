@@ -124,11 +124,11 @@ def parse_payload(raw):
     if len(raw) < 3 + 1 + 1:
         # check for minimal length
         # ident(3) + size(>=1) + payload(>=1)
-        return False, None, None
+        return False, None, None, None
     ident = raw[0:3]
     if ident != IDENT:
         #print("ident wrong: expect:{} received:{}".format(IDENT, ident))
-        return False, None, None
+        return False, None, None, None
 
     # ok, packet seems to come from mcast-discovery-daemon
     size = struct.unpack('>I', raw[3:7])[0]
@@ -138,9 +138,9 @@ def parse_payload(raw):
     if cookie == SECRET_COOKIE:
         # own packet, ignore it
         #print("own packet, ignore it")
-        return True, True, None
+        return True, True, None, None
 
-    return True, False, None
+    return True, False, None, cookie
 
 
 async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
@@ -163,10 +163,12 @@ async def tx_v6(fd, addr=None, port=DEFAULT_PORT, interval=None):
         await asyncio.sleep(interval)
 
 
-def update_db(dbx, message_ok, msg, raw_msg):
+def update_db(dbx, message_ok, msg, raw_msg, cookie):
     if not message_ok:
         dbx['stats']['packets-corrupt'] += 1
         return
+    if cookie not in dbx['stats']['neighbors']:
+        dbx['stats']['neighbors'][cookie] = True
     dbx['stats']['packets-received'] += 1
     dbx['stats']['bytes-received'] += len(raw_msg)
     proto = msg[0]
@@ -226,7 +228,7 @@ def print_db(db):
         HEADER = OKBLUE = OKGREEN = WARNING = FAIL = ENDC = ''
 
     print("\033c")
-    sys.stdout.write("{}Number of Neighbors: {}{}\n".format(WARNING, len(db['data']), ENDC))
+    sys.stdout.write("{}Number of Neighbors: {}{} (can be outdated)\n".format(WARNING, len(db['stats']['neighbors']), ENDC))
     sys.stdout.write("Received: packets:{}, byte:{}, corrupt:{}\n\n".format(
                      db['stats']['packets-received'], db['stats']['bytes-received'], db['stats']['packets-corrupt']))
     for key, value in db['data'].items():
@@ -245,6 +247,7 @@ def init_stats_db():
     stats['packets-received'] = 0
     stats['bytes-received'] = 0
     stats['packets-corrupt'] = 0
+    stats['neighbors'] = dict()
     return stats
 
 
@@ -255,9 +258,9 @@ async def print_stats(queue):
     while True:
         entry = await queue.get()
         data = entry[1]
-        ok, own, parsed_data = parse_payload(data)
+        ok, own, parsed_data, cookie = parse_payload(data)
         if not own:
-            update_db(db, ok, entry, data)
+            update_db(db, ok, entry, data, cookie)
         print_db(db)
 
 
