@@ -228,7 +228,7 @@ def print_db(db):
         HEADER = OKBLUE = OKGREEN = WARNING = FAIL = ENDC = ''
 
     print("\033c")
-    sys.stdout.write("{}Number of Neighbors: {}{} (can be outdated)\n".format(WARNING, len(db['stats']['neighbors']), ENDC))
+    sys.stdout.write("{}Number of Neighbors: {}{} (include outdated neighors)\n".format(WARNING, len(db['stats']['neighbors']), ENDC))
     sys.stdout.write("Received: packets:{}, byte:{}, corrupt:{}\n\n".format(
                      db['stats']['packets-received'], db['stats']['bytes-received'], db['stats']['packets-corrupt']))
     for key, value in db['data'].items():
