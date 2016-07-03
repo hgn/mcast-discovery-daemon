@@ -27,6 +27,9 @@ MCAST_LOOP = 0
 # For communication with separated thread (e.g. to use dbus-glib)
 # janus queue can be used: https://pypi.python.org/pypi/janus
 
+# ident to drop all non-mcast-discovery-daemon applications.
+IDENT = "FOO".encode('ascii')
+
 SECRET_COOKIE = str.encode(str(uuid.uuid4()))
 
 
@@ -110,16 +113,34 @@ def cb_v6_rx(fd, queue):
         sys.stderr.write("queue overflow, strange things happens")
 
 def create_payload():
+    ident = IDENT
+    assert len(IDENT) == 3
     data = SECRET_COOKIE
     data_len = len(data)
-    head = struct.pack('l', data_len)
-    return head + data
+    head = struct.pack('>I', data_len)
+    return ident + head + data
 
 def parse_payload(raw):
-    size = struct.unpack('l', raw[0:8])[0]
-    data = raw[8:]
-    assert len(raw) == size + 8
-    return data
+    if len(raw) < 3 + 1 + 1:
+        # check for minimal length
+        # ident(3) + size(>=1) + payload(>=1)
+        return False, None, None
+    ident = raw[0:3]
+    if ident != IDENT:
+        #print("ident wrong: expect:{} received:{}".format(IDENT, ident))
+        return False, None, None
+
+    # ok, packet seems to come from mcast-discovery-daemon
+    size = struct.unpack('>I', raw[3:7])[0]
+    cookie = raw[7:]
+    #print(size)
+    #print("secret cookie: own:{} received:{}".format(SECRET_COOKIE, cookie))
+    if cookie == SECRET_COOKIE:
+        # own packet, ignore it
+        #print("own packet, ignore it")
+        return True, True, None
+
+    return True, False, None
 
 
 async def tx_v4(fd, addr=None, port=DEFAULT_PORT, interval=None):
@@ -142,13 +163,20 @@ async def tx_v6(fd, addr=None, port=DEFAULT_PORT, interval=None):
         await asyncio.sleep(interval)
 
 
-def update_db(db, msg):
+def update_db(dbx, message_ok, msg, raw_msg):
+    if not message_ok:
+        dbx['stats']['packets-corrupt'] += 1
+        return
+    dbx['stats']['packets-received'] += 1
+    dbx['stats']['bytes-received'] += len(raw_msg)
     proto = msg[0]
     ip_src_addr = msg[2][0]
     ip_src_port = msg[2][1]
     if msg[0] == "IPv6":
         ip_src_flow_info = msg[2][2]
         ip_src_scope_id  = msg[2][3]
+
+    db = dbx['data']
     if ip_src_addr not in db:
         db[ip_src_addr] = dict()
         db[ip_src_addr]['network-protocol'] = msg[0]
@@ -198,10 +226,10 @@ def print_db(db):
         HEADER = OKBLUE = OKGREEN = WARNING = FAIL = ENDC = ''
 
     print("\033c")
-    sys.stdout.write("{}Number of Neighbors: {}{} (may include"
-                     " this host too, multiple source addresses"
-                     " possible)\n\n".format(WARNING, len(db), ENDC))
-    for key, value in db.items():
+    sys.stdout.write("{}Number of Neighbors: {}{}\n".format(WARNING, len(db['data']), ENDC))
+    sys.stdout.write("Received: packets:{}, byte:{}, corrupt:{}\n\n".format(
+                     db['stats']['packets-received'], db['stats']['bytes-received'], db['stats']['packets-corrupt']))
+    for key, value in db['data'].items():
         sys.stdout.write("{}{}{}\n".format(OKGREEN, key, ENDC))
         now = time.time()
         last_seen_delta = display_time(now - value['last-seen'])
@@ -212,17 +240,24 @@ def print_db(db):
         sys.stdout.write("\tReceived messages: {}\n".format(value['received-messages']))
         print("\n")
 
+def init_stats_db():
+    stats = dict()
+    stats['packets-received'] = 0
+    stats['bytes-received'] = 0
+    stats['packets-corrupt'] = 0
+    return stats
+
 
 async def print_stats(queue):
     db = dict()
+    db['data'] = dict()
+    db['stats'] = init_stats_db()
     while True:
         entry = await queue.get()
         data = entry[1]
-        parsed_data = parse_payload(data)
-        if parsed_data == SECRET_COOKIE:
-            # own packet, ignore it
-            return
-        update_db(db, entry)
+        ok, own, parsed_data = parse_payload(data)
+        if not own:
+            update_db(db, ok, entry, data)
         print_db(db)
 
 
